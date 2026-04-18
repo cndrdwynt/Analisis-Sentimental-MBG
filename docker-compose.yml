@@ -1,0 +1,47 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mbg_database
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASS}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: mbg_n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - DB_TYPE=mongodb
+      - DB_MONGODB_CONNECTION_URL=mongodb://${DB_USER}:${DB_PASS}@mongodb:27017/n8n?authSource=${AUTH_SOURCE}
+      - N8N_ENABLE_EXECUTE_COMMAND=true
+    depends_on:
+      - mongodb
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - .:/home/node/.n8n-files
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: mbg_metabase
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:
+  n8n_data:
+  metabase_data:

@@ -1,0 +1,12 @@
+# Rahasia & Kredensial
+.env
+
+# Data Docker (Agar tidak berat saat upload)
+mongo_data/
+n8n_data/
+metabase_data/
+
+# Python & System
+__pycache__/
+*.csv
+.DS_Store
