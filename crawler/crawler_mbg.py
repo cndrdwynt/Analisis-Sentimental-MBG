@@ -1,22 +1,26 @@
-import os
 import time
 import schedule
 import subprocess
-import pandas as pd
+from pymongo import MongoClient
 from youtube_comment_downloader import YoutubeCommentDownloader, SORT_BY_RECENT
 
-# --- KONFIGURASI ---
+# --- KONFIGURASI MONGODB ---
+MONGO_URI = "mongodb://localhost:27017/"
+DB_NAME = "mbg_db"
+COLLECTION_NAME = "raw_mbg"
+
+# --- KONFIGURASI YOUTUBE ---
 keyword = "Makan Bergizi Gratis"
 jumlah_video = 15
 komentar_per_video = 50
-file_name = 'data_mbg_yt_final.csv'
+
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+collection = db[COLLECTION_NAME]
 
 def jalankan_crawler():
-    all_data = []
     print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] --- Memulai Crawling: '{keyword}' ---")
 
-    # 1. Cari Video ID secara otomatis menggunakan yt-dlp
-    print("Sedang mencari di YouTube, mohon tunggu sebentar...")
     cmd_list = [
         "python", "-m", "yt_dlp",
         f"ytsearch{jumlah_video}:{keyword}",
@@ -42,8 +46,8 @@ def jalankan_crawler():
 
     print(f"Ditemukan {len(video_list)} video. Mulai mengambil komentar...")
 
-    # 2. Ambil Komentar dari tiap video (DENGAN TAMBAHAN KOLOM)
     downloader = YoutubeCommentDownloader()
+    data_baru_masuk = 0
 
     for v in video_list:
         try:
@@ -52,41 +56,40 @@ def jalankan_crawler():
 
             count = 0
             for comment in comments:
-                # --- BAGIAN YANG DIUBAH: MENAMBAHKAN LIKES & INFO LAIN ---
-                all_data.append({
+                doc = {
                     'video_title': v['title'],
-                    'username': comment.get('author', 'Anonim'), # Nama Akun
-                    'full_text': comment.get('text', ''),        # Isi Komentar
-                    'likes': comment.get('votes', 0),            # Jumlah Like (Votes)
-                    'waktu': comment.get('time', '')             # Kapan dikomentari
-                })
+                    'username': comment.get('author', 'Anonim'),
+                    'full_text': comment.get('text', ''),
+                    'likes': comment.get('votes', 0),
+                    'waktu': comment.get('time', ''),
+                    'status_analisis': 'belum'
+                }
+
+                hasil = collection.update_one(
+                    {
+                        'username': doc['username'],
+                        'full_text': doc['full_text']
+                    },
+                    {'$setOnInsert': doc},
+                    upsert=True
+                )
+
+                if hasil.upserted_id is not None:
+                    data_baru_masuk += 1
+
                 count += 1
                 if count >= komentar_per_video:
                     break
-        except Exception:
+        except Exception as e:
+            print(f"Gagal memproses video {v['title']}: {e}")
             pass
 
-    # 3. Simpan dan Gabungkan ke CSV (Anti Duplikat)
-    if all_data:
-        df_new = pd.DataFrame(all_data)
-        
-        if os.path.exists(file_name):
-            df_old = pd.read_csv(file_name)
-            df_combined = pd.concat([df_old, df_new])
-            df_combined.drop_duplicates(subset=['video_title', 'full_text'], keep='first', inplace=True)
-            df_combined.to_csv(file_name, index=False)
-            print(f"✅ Update berhasil! Total data saat ini: {len(df_combined)} baris.")
-        else:
-            df_new.to_csv(file_name, index=False)
-            print(f"✅ File baru dibuat! Total data: {len(df_new)} baris.")
-    else:
-        print("Zonk! Tidak ada komentar baru.")
-        
+    total_data = collection.count_documents({})
+    print(f"✅ Crawling Selesai! Ada {data_baru_masuk} komentar baru yang masuk ke MongoDB.")
+    print(f"📊 Total seluruh data di database saat ini: {total_data} baris.")
     print("Menunggu jadwal eksekusi berikutnya...")
 
-# --- PENGATURAN JADWAL ---
 jalankan_crawler()
-
 schedule.every(6).hours.do(jalankan_crawler)
 
 while True:

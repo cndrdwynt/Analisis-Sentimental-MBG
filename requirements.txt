@@ -1,0 +1,4 @@
+pymongo
+schedule
+youtube-comment-downloader
+yt-dlp
