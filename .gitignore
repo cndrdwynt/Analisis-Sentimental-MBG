@@ -1,10 +1,13 @@
 # Rahasia & Kredensial
 .env
 
-# Data Docker (Agar tidak berat saat upload)
-mongo_data/
-n8n_data/
-metabase_data/
+# Data Docker (Disesuaikan dengan nama folder asli)
+db_mongo/
+data_n8n/
+data_metabase/
+
+# Python Virtual Environment
+env/
 
 # Python & System
 __pycache__/
